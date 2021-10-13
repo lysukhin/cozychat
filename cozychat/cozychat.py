@@ -1,15 +1,29 @@
-"""Simple tool for analyzing VK chat contents. Chat's txt can be downloaded via Kate Mobile (https://vk.com/kate_mobile) app."""
+"""Simple tool for analyzing VK or Telegram chat contents.
+VK chat's txt can be saved via Kate Mobile (https://vk.com/kate_mobile) app.
+Telegram group chat's json can be exported via Telegram Desktop (https://desktop.telegram.org/) app."""
 
 import re
-import tqdm
+import json
 import datetime
 
 from collections import defaultdict, Counter
 
+import tqdm
+
 from pandas import DataFrame
 import seaborn
+
 seaborn.set_palette("pastel")
+
 import matplotlib.pyplot as plt
+
+# https://matplotlib.org/stable/tutorials/text/text_props.html#default-font
+# https://matplotlib.org/stable/gallery/text_labels_and_annotations/font_family_rc_sgskip.html#configuring-the-font-family
+plt.rcParams["font.family"] = "sans-serif"
+# https://www.paratype.ru/fonts/pt/pt-sans
+# https://fonts.google.com/noto/specimen/Noto+Sans
+# rm -rf ~/.cache/matplotlib
+plt.rcParams["font.sans-serif"] = ["PT Sans", "Noto Sans", "DejaVu Sans"]
 
 # https://natasha.github.io/razdel/
 from razdel import tokenize
@@ -17,21 +31,25 @@ from razdel import tokenize
 # https://github.com/amueller/word_cloud
 from wordcloud import WordCloud
 
-from .utils import NEW_MESSAGE_PATTERN, MONTHS, STOP_WORDS, MESSAGE_STOP_WORDS, MIN_WORD_LEN, FIGURE_SIZE, ascii_lowercase, digits, OBSCENE_WORDS_FILTER, OBSCENE_FILTER_FALSES, LETSGO_WORDS, SENTIMENT_MODEL
+from .utils import VK_NEW_MESSAGE_PATTERN_RU, VK_NEW_MESSAGE_PATTERN_EN, VK_NAME_PATTERN, VK_TIMESTAMP_PATTERN_RU, \
+    VK_TIMESTAMP_PATTERN_EN, VK_MONTHS_RU, VK_MONTHS_EN, STOP_WORDS, VK_MESSAGE_STOP_WORDS, TELEGRAM_IGNORE_IDS, \
+    MIN_WORD_LEN, FIGURE_SIZE, FONT_SIZE, ascii_lowercase, digits, OBSCENE_WORDS_FILTER, OBSCENE_FILTER_FALSES, \
+    LETSGO_WORDS, SENTIMENT_MODEL
 from .utils import mode, strip_message
 
 
 class CozyChat(object):
     """TODO"""
-    def __init__(self, chat_txt_path):
-        self.df = self._create_dataframe(chat_txt_path)
-        
+
+    def __init__(self, chat_txt_path, chat_type="vk"):
+        self.df = self._create_dataframe(chat_txt_path, chat_type)
+
     def _filter_df_by_year(self, year):
         if year is not None:
-            return self.df[self.df.year==year]
+            return self.df[self.df.year == year]
         else:
-            return df
-    
+            return self.df
+
     def show_total_messages_per_user(self, year=None):
         """Всего сообщений по людям."""
         df_year = self._filter_df_by_year(year)
@@ -54,10 +72,10 @@ class CozyChat(object):
         plt.show()
 
         return total_messages_per_user
-    
+
     def show_total_messages_per_month(self, year=None):
         """Всего сообщений по месяцам."""
-        df_year = self._filter_df_by_year(year)  
+        df_year = self._filter_df_by_year(year)
 
         total_messages_per_month = df_year.value_counts("month")
 
@@ -76,10 +94,10 @@ class CozyChat(object):
         plt.show()
 
         return total_messages_per_month
-    
+
     def show_total_messages_per_hour(self, year=None):
         """Всего сообщений по времени суток."""
-        df_year = self._filter_df_by_year(year)  
+        df_year = self._filter_df_by_year(year)
 
         total_messages_per_hour = df_year.value_counts("hour")
 
@@ -101,8 +119,8 @@ class CozyChat(object):
 
     def show_total_messages_per_hour_per_user(self, year=None):
         """Всего сообщений по времени суток по людям."""
-        df_year = self._filter_df_by_year(year)  
- 
+        df_year = self._filter_df_by_year(year)
+
         groupby_user = df_year.groupby("name")
         groupby_user_hours = groupby_user["hour"]
         mode_hour_per_user = groupby_user_hours.agg(mode)
@@ -126,7 +144,7 @@ class CozyChat(object):
             plt.subplot(len(users), 1, i)
             plt.title(user)
 
-            df_year_user = df_year[df_year["name"]==user]
+            df_year_user = df_year[df_year["name"] == user]
             total_messages_per_hour_per_user = df_year_user.value_counts("hour")
 
             xs = total_messages_per_hour_per_user.index.to_list()
@@ -140,8 +158,9 @@ class CozyChat(object):
         plt.show()
 
         return mode_hour_per_user
-    
-    def _count_words(self, messages_list, stop_words=STOP_WORDS, message_stop_words=MESSAGE_STOP_WORDS, min_word_len=MIN_WORD_LEN, ru_only=True):
+
+    def _count_words(self, messages_list, stop_words=STOP_WORDS, message_stop_words=VK_MESSAGE_STOP_WORDS,
+                     min_word_len=MIN_WORD_LEN, ru_only=True):
         words_counter = Counter()
         for msg in messages_list:
             words = {w.text for w in tokenize(msg)}  # 'set' for faster in/out check
@@ -157,15 +176,16 @@ class CozyChat(object):
                     continue
                 words_counter[word] += 1
         return words_counter
-    
+
     def _get_wordcloud(self, words_count):
-        wordcloud_gen = WordCloud(width=1600, height=900, background_color="white", colormap="tab10", relative_scaling=1.0)
+        wordcloud_gen = WordCloud(width=1600, height=900, background_color="white", colormap="tab10",
+                                  relative_scaling=1.0)
         wordcloud = wordcloud_gen.generate_from_frequencies(words_count)
         return wordcloud
 
     def show_words_cloud(self, year=None, per_user=False):
         """Нарисовать облака популярных слов."""
-        df_year = self._filter_df_by_year(year)  
+        df_year = self._filter_df_by_year(year)
 
         if not per_user:
             messages = self._get_messages_list(df_year)
@@ -173,7 +193,7 @@ class CozyChat(object):
             wordcloud = self._get_wordcloud(words_count)
 
             plt.figure(figsize=(FIGURE_SIZE[0], int(FIGURE_SIZE[1] * 1.5)))
-            plt.title(f"Облако самых популярных слов, {year}", fontsize=20)
+            plt.title(f"Облако самых популярных слов, {year}", fontsize=FONT_SIZE)
             plt.imshow(wordcloud)
             plt.axis("off")
             plt.show()
@@ -184,7 +204,7 @@ class CozyChat(object):
         for i, user in enumerate(users, start=1):
             plt.figure(figsize=(FIGURE_SIZE[0], int(FIGURE_SIZE[1] * 1.5)))
             title = f"Облако самых популярных слов, {year}, {user}"
-            plt.title(title, fontsize=20)
+            plt.title(title, fontsize=FONT_SIZE)
 
             messages = self._get_messages_list(df_year, user=user)
             words_count = self._count_words(messages)
@@ -193,7 +213,7 @@ class CozyChat(object):
             plt.imshow(wordcloud)
             plt.axis("off")
             plt.show()
-            
+
     def _count_obscene_words_usage(self, words_count, obscene_words_filter=OBSCENE_WORDS_FILTER):
         counter = Counter()
         for word, count in words_count.items():
@@ -207,7 +227,7 @@ class CozyChat(object):
 
     def show_obscene_usage(self, year=None):
         """Топ ругающихся пользователей."""
-        df_year = self._filter_df_by_year(year)  
+        df_year = self._filter_df_by_year(year)
 
         users = df_year["name"].unique()
         obscene_users_rating = {}
@@ -225,7 +245,7 @@ class CozyChat(object):
 
             plt.figure(figsize=(FIGURE_SIZE[0], int(FIGURE_SIZE[1] * 1.5)))
             title = f"{user} ругался(-ась) {obscene_rating} раз(а) в {year} году"
-            plt.title(title, fontsize=20)
+            plt.title(title, fontsize=FONT_SIZE)
 
             wordcloud = self._get_wordcloud(obscene_count)
 
@@ -242,7 +262,7 @@ class CozyChat(object):
 
         plt.figure(figsize=FIGURE_SIZE)
         title = f"Самые матерящиеся люди, {year}"
-        plt.suptitle(title, fontsize=20)
+        plt.suptitle(title, fontsize=FONT_SIZE)
 
         plt.subplot(1, 2, 1)
         plt.bar(xs, ys)
@@ -262,10 +282,9 @@ class CozyChat(object):
                 counter[word] += count
         return counter
 
-
     def show_letsgo_usage(self, year=None):
         """Топ проактивных пользователей."""
-        df_year = self._filter_df_by_year(year)  
+        df_year = self._filter_df_by_year(year)
 
         users = df_year["name"].unique()
         letsgo_users_rating = {}
@@ -283,7 +302,7 @@ class CozyChat(object):
 
             plt.figure(figsize=(FIGURE_SIZE[0], int(FIGURE_SIZE[1] * 1.5)))
             title = f"{user} звал куда-то {letsgo_rating} раз(а) в {year} году"
-            plt.title(title, fontsize=20)
+            plt.title(title, fontsize=FONT_SIZE)
 
             wordcloud = self._get_wordcloud(letsgo_count)
 
@@ -300,7 +319,7 @@ class CozyChat(object):
 
         plt.figure(figsize=FIGURE_SIZE)
         title = f"Самые про-активные люди, {year}"
-        plt.suptitle(title, fontsize=20)
+        plt.suptitle(title, fontsize=FONT_SIZE)
 
         plt.subplot(1, 2, 1)
         plt.bar(xs, ys)
@@ -312,7 +331,7 @@ class CozyChat(object):
         plt.pie(ys, labels=xs)
 
         plt.show()
-    
+
     def _compute_positive_rating(self, messages):
         rating = 0
         for msg in messages:
@@ -323,12 +342,11 @@ class CozyChat(object):
 
     def show_positive_usage(self, year=None):
         """Топ позитивных пользователей."""
-        df_year = self._filter_df_by_year(year)  
+        df_year = self._filter_df_by_year(year)
 
         users = df_year["name"].unique()
         positive_users_rating = {}
         for i, user in enumerate(users, start=1):
-
             messages = self._get_messages_list(df_year, user=user)
             positive_rating = self._compute_positive_rating(messages)
             positive_users_rating[user] = positive_rating
@@ -342,7 +360,7 @@ class CozyChat(object):
 
         plt.figure(figsize=FIGURE_SIZE)
         title = f"Самые позитивные)))) люди, {year}"
-        plt.suptitle(title, fontsize=20)
+        plt.suptitle(title, fontsize=FONT_SIZE)
 
         plt.subplot(1, 2, 1)
         plt.bar(xs, ys)
@@ -350,8 +368,9 @@ class CozyChat(object):
         plt.grid()
         plt.ylabel("Индекс позитивности")
 
-        plt.subplot(1, 2, 2)
-        plt.pie(ys, labels=xs)
+        # TODO pie chart cannot show negative((( people
+        # plt.subplot(1, 2, 2)
+        # plt.pie(ys, labels=xs)
 
         plt.show()
 
@@ -376,10 +395,9 @@ class CozyChat(object):
 
         return dict(positive=positive_rating, negative=negative_rating, neutral=neutral_rating)
 
-
     def show_sentiment(self, year=None):
         """Топ добрых пользователей."""
-        df_year = self._filter_df_by_year(year)  
+        df_year = self._filter_df_by_year(year)
 
         users = df_year["name"].unique()
         positive_sentiment_users_rating, negative_sentiment_users_rating = {}, {}
@@ -389,10 +407,9 @@ class CozyChat(object):
             positive_sentiment_users_rating[user] = sentiment_ratings["positive"]
             negative_sentiment_users_rating[user] = sentiment_ratings["negative"]
 
-
         plt.figure(figsize=FIGURE_SIZE)
-        title = f"Эмоцинальная окраска сообщений, {year}"
-        plt.suptitle(title, fontsize=20)
+        title = f"Эмоциональная окраска сообщений, {year}"
+        plt.suptitle(title, fontsize=FONT_SIZE)
 
         plt.subplot(1, 2, 1)
         plt.title("Для положительных сообщений")
@@ -421,66 +438,100 @@ class CozyChat(object):
         plt.grid()
 
         plt.show()
-    
-    def _create_dataframe(self, chat_txt_path):
+
+    def _create_dataframe(self, chat_txt_path, chat_type="vk"):
         with open(chat_txt_path, "rt", encoding="utf-8") as fp:
             messages_str = fp.read()
-        messages_list = self._collect_messages(messages_str)
+        messages_list = []
+        if chat_type == "vk":
+            messages_list = self._vk_collect_messages(messages_str)
+        elif chat_type == "telegram":
+            messages_list = self._telegram_collect_messages(messages_str)
+        print(messages_list)
         df = self._build_df(messages_list)
         return df
-    
-    def _parse_message_header(self, header):
-        header = header.strip()
-        name_pattern = r"[А-ЯA-Z][а-яa-z]+ [А-ЯA-Z][а-яa-z]+"
-        name = re.findall(name_pattern, header)[0]
 
-        timestamp_pattern = r"[\d]{1,2} [а-я]+. [\d]{4} г. [\d]{2}:[\d]{2}:[\d]{2}"
+    def _vk_parse_message_header(self, header, name_pattern=VK_NAME_PATTERN, timestamp_pattern=VK_TIMESTAMP_PATTERN_EN,
+                                 months=VK_MONTHS_EN):
+        header = header.strip()
+        name = re.findall(name_pattern, header)[0]
         datetime_str = re.findall(timestamp_pattern, header)[0]
-        day, month, year, _, time = datetime_str.split()
-        month = month.strip('.')
-        month = MONTHS.index(month) + 1
+        if timestamp_pattern == VK_TIMESTAMP_PATTERN_RU:
+            day, month, year, _, time = datetime_str.split()
+        elif timestamp_pattern == VK_TIMESTAMP_PATTERN_EN:
+            month, day, year, time = datetime_str.split()
+        day = day.strip(',')
+        month = month.strip('.').lower()
+        month = months.index(month) + 1
         hours, minutes, seconds = time.split(':')
         timestamp = datetime.datetime(int(year), int(month), int(day), int(hours), int(minutes), int(seconds))
 
         return name, timestamp
 
-    def _collect_messages(self, messages_str, new_msg_pattern=NEW_MESSAGE_PATTERN):
+    def _vk_collect_messages(self, messages_str, vk_new_msg_pattern=VK_NEW_MESSAGE_PATTERN_EN):
         msgs_list = []
-        i = 0
-        matches = list(re.finditer(new_msg_pattern, messages_str))
+        matches = list(re.finditer(vk_new_msg_pattern, messages_str))
+        print(len(matches))
         for i in tqdm.trange(len(matches)):
             match = matches[i]
             header_start_pos, header_end_pos = match.span()
-            header = messages_str[header_start_pos: header_end_pos]
-            name, timestamp = self._parse_message_header(header)
+            header = messages_str[header_start_pos:header_end_pos]
+            name, timestamp = self._vk_parse_message_header(header)
 
             text_start_pos = header_end_pos
             if i == len(matches) - 1:
                 text_end_pos = len(messages_str)
             else:
                 next_match = matches[i + 1]
-                text_end_pos, _ = next_match.span() 
+                text_end_pos, _ = next_match.span()
 
-            text = messages_str[text_start_pos: text_end_pos]
+            text = messages_str[text_start_pos:text_end_pos]
             text = text.strip()
             if not text:
                 continue
 
             msgs_list.append((name, timestamp, text))
-
         return msgs_list
-    
+
+    def _telegram_collect_messages(self, messages_str):
+        msgs_list = []
+        messages = json.loads(messages_str)['messages']
+        needed_keys = {'from', 'date', 'text'}
+        for i in tqdm.trange(len(messages)):
+            message = messages[i]
+            if needed_keys.intersection(message.keys()) == needed_keys and 'forwarded_from' not in message.keys():
+                id = int(''.join(filter(str.isdigit, message['from_id'])))
+                if id in TELEGRAM_IGNORE_IDS:
+                    continue
+                name = message['from']
+                if not name:
+                    continue
+                timestamp = datetime.datetime.fromisoformat(message['date'])
+                text_src = message['text']
+                text = ""
+                if isinstance(text_src, list):
+                    for entity in text_src:
+                        if isinstance(entity, str):
+                            text += " " + entity
+                else:
+                    text = text_src
+                text = text.strip()
+                if not text:
+                    continue
+
+                msgs_list.append((name, timestamp, text))
+        return msgs_list
+
     def _build_df(self, msgs_list):
         df = DataFrame(msgs_list, columns=("name", "timestamp", "text"))
         for t in ("year", "day", "month", "hour", "minute", "second"):
-            df[t] = df.timestamp.map(lambda x:getattr(x, t))
+            df[t] = df.timestamp.map(lambda x: getattr(x, t))
         return df
-    
-    
+
     def _get_messages_list(self, df, user=None):
         if user is None:
             df_user = df
         else:
-            df_user = df[df["name"]==user]
+            df_user = df[df["name"] == user]
         messages = [strip_message(msg) for msg in df_user["text"]]
         return messages
