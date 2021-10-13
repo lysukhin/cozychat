@@ -1,0 +1,10 @@
+pip-tools
+jupyterlab
+tqdm
+pandas
+seaborn
+wordcloud
+razdel
+stop-words
+python-obscene-words-filter
+dostoevsky
