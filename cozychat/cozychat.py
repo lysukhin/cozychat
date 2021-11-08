@@ -44,18 +44,26 @@ class CozyChat(object):
     def __init__(self, chat_txt_path, chat_type="vk"):
         self.df = self._create_dataframe(chat_txt_path, chat_type)
 
-    def _filter_df_by_year(self, year):
-        if year is not None:
-            return self.df[self.df.year == year]
-        else:
-            return self.df
+    def _filter_df(self, year=None, message_type="text", forwarded=False):
+        result = self.df
+        if year:
+            result = result[result.year == year]
+        if message_type == "text":
+            # we want all message types containing text
+            result = result[result.text != ""]
+        elif message_type:
+            result = result[result.message_type == message_type]
+        if forwarded is not None:
+            result = result[result.forwarded == forwarded]
+        return result
 
-    def show_total_messages_per_user(self, year=None):
-        """Всего сообщений по людям."""
-        df_year = self._filter_df_by_year(year)
-        print(f"Всего сообщений за {year} год: {len(df_year)}")
+    def show_total_messages_per_user(self, year=None, message_type="text", forwarded=False):
+        """Всего сообщений (одного типа) по людям."""
+        df_filtered = self._filter_df(year, message_type, forwarded)
+        forwarded_text = "forwarded" if forwarded else "original"
+        print(f"Всего {message_type} {forwarded_text} сообщений за {year} год: {len(df_filtered)}")
 
-        total_messages_per_user = df_year.value_counts("name")
+        total_messages_per_user = df_filtered.value_counts("name")
 
         plt.figure(figsize=FIGURE_SIZE)
         plt.suptitle(f"Year = {year}")
@@ -75,7 +83,7 @@ class CozyChat(object):
 
     def show_total_messages_per_month(self, year=None):
         """Всего сообщений по месяцам."""
-        df_year = self._filter_df_by_year(year)
+        df_year = self._filter_df(year)
 
         total_messages_per_month = df_year.value_counts("month")
 
@@ -97,7 +105,7 @@ class CozyChat(object):
 
     def show_total_messages_per_hour(self, year=None):
         """Всего сообщений по времени суток."""
-        df_year = self._filter_df_by_year(year)
+        df_year = self._filter_df(year)
 
         total_messages_per_hour = df_year.value_counts("hour")
 
@@ -119,7 +127,7 @@ class CozyChat(object):
 
     def show_total_messages_per_hour_per_user(self, year=None):
         """Всего сообщений по времени суток по людям."""
-        df_year = self._filter_df_by_year(year)
+        df_year = self._filter_df(year)
 
         groupby_user = df_year.groupby("name")
         groupby_user_hours = groupby_user["hour"]
@@ -185,7 +193,7 @@ class CozyChat(object):
 
     def show_words_cloud(self, year=None, per_user=False):
         """Нарисовать облака популярных слов."""
-        df_year = self._filter_df_by_year(year)
+        df_year = self._filter_df(year)
 
         if not per_user:
             messages = self._get_messages_list(df_year)
@@ -227,7 +235,7 @@ class CozyChat(object):
 
     def show_obscene_usage(self, year=None):
         """Топ ругающихся пользователей."""
-        df_year = self._filter_df_by_year(year)
+        df_year = self._filter_df(year)
 
         users = df_year["name"].unique()
         obscene_users_rating = {}
@@ -284,7 +292,7 @@ class CozyChat(object):
 
     def show_letsgo_usage(self, year=None):
         """Топ проактивных пользователей."""
-        df_year = self._filter_df_by_year(year)
+        df_year = self._filter_df(year)
 
         users = df_year["name"].unique()
         letsgo_users_rating = {}
@@ -342,7 +350,7 @@ class CozyChat(object):
 
     def show_positive_usage(self, year=None):
         """Топ позитивных пользователей."""
-        df_year = self._filter_df_by_year(year)
+        df_year = self._filter_df(year)
 
         users = df_year["name"].unique()
         positive_users_rating = {}
@@ -397,7 +405,7 @@ class CozyChat(object):
 
     def show_sentiment(self, year=None):
         """Топ добрых пользователей."""
-        df_year = self._filter_df_by_year(year)
+        df_year = self._filter_df(year)
 
         users = df_year["name"].unique()
         positive_sentiment_users_rating, negative_sentiment_users_rating = {}, {}
@@ -447,7 +455,7 @@ class CozyChat(object):
             messages_list = self._vk_collect_messages(messages_str)
         elif chat_type == "telegram":
             messages_list = self._telegram_collect_messages(messages_str)
-        print(messages_list)
+        # print(messages_list)
         df = self._build_df(messages_list)
         return df
 
@@ -471,7 +479,7 @@ class CozyChat(object):
     def _vk_collect_messages(self, messages_str, vk_new_msg_pattern=VK_NEW_MESSAGE_PATTERN_EN):
         msgs_list = []
         matches = list(re.finditer(vk_new_msg_pattern, messages_str))
-        print(len(matches))
+        # print(len(matches))
         for i in tqdm.trange(len(matches)):
             match = matches[i]
             header_start_pos, header_end_pos = match.span()
@@ -489,8 +497,10 @@ class CozyChat(object):
             text = text.strip()
             if not text:
                 continue
+            message_type = "text"
+            forwarded = False
 
-            msgs_list.append((name, timestamp, text))
+            msgs_list.append((name, timestamp, text, message_type, forwarded))
         return msgs_list
 
     def _telegram_collect_messages(self, messages_str):
@@ -499,37 +509,60 @@ class CozyChat(object):
         needed_keys = {'from', 'date', 'text'}
         for i in tqdm.trange(len(messages)):
             message = messages[i]
-            if needed_keys.intersection(message.keys()) == needed_keys and 'forwarded_from' not in message.keys():
-                id = int(''.join(filter(str.isdigit, message['from_id'])))
-                if id in TELEGRAM_IGNORE_IDS:
-                    continue
-                name = message['from']
-                if not name:
-                    continue
-                timestamp = datetime.datetime.fromisoformat(message['date'])
-                text_src = message['text']
-                text = ""
-                if isinstance(text_src, list):
-                    for entity in text_src:
-                        if isinstance(entity, str):
-                            text += " " + entity
-                else:
-                    text = text_src
-                text = text.strip()
-                if not text:
-                    continue
+            if needed_keys.intersection(message.keys()) != needed_keys:
+                continue
+            id = int(''.join(filter(str.isdigit, message['from_id'])))
+            if id in TELEGRAM_IGNORE_IDS:
+                continue
+            name = message['from']
+            if not name:
+                continue
+            timestamp = datetime.datetime.fromisoformat(message['date'])
+            forwarded = False
+            if 'forwarded_from' in message:
+                forwarded = True
 
-                msgs_list.append((name, timestamp, text))
+            text = ""
+            message_type = ""
+
+            text_src = message['text']
+            if isinstance(text_src, list):
+                for entity in text_src:
+                    if isinstance(entity, str):
+                        text += " " + entity
+                    elif isinstance(entity, dict):
+                        if entity["type"] == "link":
+                            if "open.spotify.com" in entity["text"]:
+                                message_type = "link_spotify"
+                            elif "youtu" in entity["text"]:
+                                message_type = "link_youtube"
+            else:
+                text = text_src
+            text = text.strip()
+
+            if "media_type" in message:
+                if message["media_type"] == "voice_message":
+                    message_type = "voice_or_round"
+                elif message["media_type"] == "video_message":
+                    message_type = "voice_or_round"
+                elif message["media_type"] == "video_file":
+                    message_type = "photo_or_video"
+            elif "photo" in message:
+                message_type = "photo_or_video"
+            if not message_type:
+                message_type = "misc"
+            # print(text, message_type)
+            msgs_list.append((name, timestamp, text, message_type, forwarded))
         return msgs_list
 
     def _build_df(self, msgs_list):
-        df = DataFrame(msgs_list, columns=("name", "timestamp", "text"))
+        df = DataFrame(msgs_list, columns=("name", "timestamp", "text", "message_type", "forwarded"))
         for t in ("year", "day", "month", "hour", "minute", "second"):
             df[t] = df.timestamp.map(lambda x: getattr(x, t))
         return df
 
     def _get_messages_list(self, df, user=None):
-        if user is None:
+        if not user:
             df_user = df
         else:
             df_user = df[df["name"] == user]

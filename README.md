@@ -7,15 +7,21 @@ Telegram group chat's json can be exported via Telegram Desktop (https://desktop
 
 Python 3 is required, 3.8 and 3.9 is tested.
 
+Quick start:
 ```bash
 git clone https://github.com/lysukhin/cozychat.git
 cd cozychat
 pip install -r requirements.txt
 python -m dostoevsky download fasttext-social-network-model
 cd examples
-jupyter-lab --ServerApp.iopub_data_rate_limit=1.0e10
-# place your txt or json into examples
-# open 2020.ipynb, change path and run 
+jupyter-lab --ServerApp.iopub_data_rate_limit=1.0e10  
+```
+Place your txt or json into examples, open 2020.ipynb, change path and run the code.
+
+If you want to export as web-rendered pdf (webpdf):
+```
+pip install nbconvert[webpdf]
+pyppeteer-install
 ```
 
 Links to notebooks on nbviewer:
