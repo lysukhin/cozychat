@@ -230,5 +230,5 @@ ipython_config.py
 .python-version
 examples/*.txt
 examples/*.json
-examples/bl.*
+examples/bl*
 *.ttf

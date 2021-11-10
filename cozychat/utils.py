@@ -23,8 +23,8 @@ VK_MONTHS_RU = ("янв", "февр", "мар", "апр", "мая", "июн", "�
 VK_MONTHS_EN = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 VK_MESSAGE_STOP_WORDS = {"прикрепления", "attachments"}
 
-# Personal manually compiled list to ignore bots
-TELEGRAM_IGNORE_IDS = [1145805651, 446851068, 1311511290, 166483052, 1617463834]
+# Personal manually compiled list to exclude bots from stats
+TELEGRAM_IGNORE_IDS = [1145805651, 446851068, 1311511290, 166483052, 1617463834, 1167635614]
 
 STOP_WORDS = get_stop_words("ru")
 MIN_WORD_LEN = 3
