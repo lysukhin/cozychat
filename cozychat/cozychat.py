@@ -41,10 +41,11 @@ from .utils import mode, strip_message
 class CozyChat(object):
     """TODO"""
 
-    def __init__(self, chat_txt_path, chat_type="vk"):
+    def __init__(self, chat_txt_path, chat_type="vk", bots_names=[]):
         self.df = self._create_dataframe(chat_txt_path, chat_type)
+        self.df = self._filter_df(ignore_users=bots_names)
 
-    def _filter_df(self, year=None, message_type="text", forwarded=False):
+    def _filter_df(self, year=None, message_type="text", forwarded=False, ignore_users=[]):
         result = self.df
         if year:
             result = result[result.year == year]
@@ -55,6 +56,9 @@ class CozyChat(object):
             result = result[result.message_type == message_type]
         if forwarded is not None:
             result = result[result.forwarded == forwarded]
+        if len(ignore_users) > 0:
+            ignore_users = set(ignore_users)
+            result = result[~result.name.isin(ignore_users)]
         return result
 
     def show_total_messages_per_user(self, year=None, message_type="text", forwarded=False):
@@ -64,7 +68,6 @@ class CozyChat(object):
         print(f"Всего {message_type} {forwarded_text} сообщений за {year} год: {len(df_filtered)}")
 
         total_messages_per_user = df_filtered.value_counts("name")
-
         plt.figure(figsize=FIGURE_SIZE)
         plt.suptitle(f"Year = {year}")
 
@@ -80,6 +83,62 @@ class CozyChat(object):
         plt.show()
 
         return total_messages_per_user
+
+    def show_total_messages_length_per_user(self, year=None, message_type="text", forwarded=False):
+        """Длина всех сообщений (одного типа) по людям."""
+        df_filtered = self._filter_df(year, message_type, forwarded)
+        df_filtered["text_len"] = list(map(len, df_filtered.text))
+        total_text_len_per_user = df_filtered.groupby("name").agg({"text_len": "sum"}) \
+            .sort_values(by="text_len", ascending=False)
+
+        forwarded_text = "forwarded" if forwarded else "original"
+        print(
+            f"Длина всех {message_type} {forwarded_text} сообщений за {year} год: {sum(total_text_len_per_user.text_len)}")
+
+        plt.figure(figsize=FIGURE_SIZE)
+        plt.suptitle(f"Year = {year}")
+
+        plt.subplot(1, 2, 1)
+        # total_text_len_per_user.plot.barh(y="text_len", ax=axes[0], ylabel="")
+        # FIXME: above is not working wtf
+        plt.barh(y=total_text_len_per_user.index, width=total_text_len_per_user.text_len)
+        plt.grid()
+        plt.xlabel("Длина сообщений за год")
+
+        plt.subplot(1, 2, 2)
+        plt.pie(x=total_text_len_per_user.text_len, labels=total_text_len_per_user.index)
+
+        plt.tight_layout()
+        plt.show()
+
+        return total_text_len_per_user
+
+    def show_average_messages_length_per_user(self, year=None, message_type="text", forwarded=False):
+        """Средняя длина сообщения (одного типа) по людям."""
+        df_filtered = self._filter_df(year, message_type, forwarded)
+        df_filtered["text_len"] = list(map(len, df_filtered.text))
+        mean_text_len_per_user = df_filtered.groupby("name").agg({"text_len": "mean"}) \
+            .sort_values(by="text_len", ascending=False)
+
+        forwarded_text = "forwarded" if forwarded else "original"
+        print(
+            f"Средняя длина сообщения {message_type} {forwarded_text} сообщений за {year} год: {df_filtered.text_len.mean()}")
+
+        plt.figure(figsize=FIGURE_SIZE)
+        plt.suptitle(f"Year = {year}")
+
+        plt.subplot(1, 2, 1)
+        plt.barh(y=mean_text_len_per_user.index, width=mean_text_len_per_user.text_len)
+        plt.grid()
+        plt.xlabel("Средняя длина сообщения за год")
+
+        plt.subplot(1, 2, 2)
+        plt.pie(x=mean_text_len_per_user.text_len, labels=mean_text_len_per_user.index)
+
+        plt.tight_layout()
+        plt.show()
+
+        return mean_text_len_per_user
 
     def show_total_messages_per_month(self, year=None):
         """Всего сообщений по месяцам."""
