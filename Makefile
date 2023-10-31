@@ -7,6 +7,8 @@ run:
 .PHONY: install
 install:
 	poetry install --sync
+	poetry run dostoevsky download fasttext-social-network-model
+	poetry run playwright install chromium
 
 .PHONY: update
 update:

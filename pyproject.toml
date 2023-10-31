@@ -11,7 +11,8 @@ python = "^3.8.1"
 jupyterlab = "^4.0.7"
 nbconvert = { version = "*", extras = ["webpdf"] }
 tqdm = "^4.66.1"
-pandas = "^2.0.3"
+# pandas 1.4 and higher breaks show_total_messages_per_hour_per_user
+pandas = "1.3.5"
 seaborn = "^0.13.0"
 wordcloud = "^1.9.2"
 razdel = "^0.5.0"
