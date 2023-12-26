@@ -17,13 +17,12 @@ seaborn.set_palette("pastel")
 
 import matplotlib.pyplot as plt
 
-# https://matplotlib.org/stable/tutorials/text/text_props.html#default-font
-# https://matplotlib.org/stable/gallery/text_labels_and_annotations/font_family_rc_sgskip.html#configuring-the-font-family
+# https://matplotlib.org/stable/users/explain/text/text_props.html
+# https://matplotlib.org/3.1.1/gallery/text_labels_and_annotations/font_family_rc_sgskip.html#configuring-the-font-family
 plt.rcParams["font.family"] = "sans-serif"
-# https://www.paratype.ru/fonts/pt/pt-sans
 # https://fonts.google.com/noto/specimen/Noto+Sans
 # rm -rf ~/.cache/matplotlib
-plt.rcParams["font.sans-serif"] = ["PT Sans", "Noto Sans", "DejaVu Sans"]
+plt.rcParams["font.sans-serif"] = ["Noto Sans", "DejaVu Sans"]
 
 # https://natasha.github.io/razdel/
 from razdel import tokenize
