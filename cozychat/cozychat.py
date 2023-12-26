@@ -190,6 +190,8 @@ class CozyChat(object):
 
         groupby_user = df_year.groupby("name")
         groupby_user_hours = groupby_user["hour"]
+        # Doesn't work in pandas 1.4 and higher:
+        # https://pandas.pydata.org/docs/whatsnew/v1.4.0.html#backwards-incompatible-api-changes
         mode_hour_per_user = groupby_user_hours.agg(mode)
 
         plt.figure(figsize=FIGURE_SIZE)
