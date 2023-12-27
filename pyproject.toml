@@ -23,6 +23,7 @@ dostoevsky = "^0.6.0"
 # https://github.com/facebookresearch/fastText/pull/1292
 fasttext = { git = "https://github.com/gpchelkin/fastText", branch = "main" }
 scipy = "^1.9.3"
+img2pdf = "*"
 
 [build-system]
 requires = ["poetry-core>=1.5.0"]
