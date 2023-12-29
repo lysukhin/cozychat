@@ -13,6 +13,8 @@ nbconvert = { version = "*", extras = ["webpdf"] }
 tqdm = "^4.66.1"
 # pandas 1.4 and higher breaks show_total_messages_per_hour_per_user
 pandas = "1.3.5"
+# lxml 5.0.0 does not want to install
+lxml = "4.9.4"
 seaborn = "^0.13.0"
 wordcloud = "^1.9.2"
 razdel = "^0.5.0"
